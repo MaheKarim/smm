@@ -32,10 +32,12 @@ class SyncFacebookDataJob implements ShouldQueue
 
         try {
             $accessToken = $this->socialAccount->access_token;
-            $page = $this->socialAccount->facebookPage;
-
+            
+            // Get or create the Facebook Page record
+            $page = $this->getOrCreateFacebookPage($accessToken);
+            
             if (!$page) {
-                throw new \Exception('Facebook Page not found');
+                throw new \Exception('Could not retrieve Facebook Page information');
             }
 
             // Sync page insights
@@ -210,6 +212,79 @@ class SyncFacebookDataJob implements ShouldQueue
                 $metrics
             );
         }
+    }
+
+    /**
+     * Get or create the Facebook Page record from the token
+     */
+    protected function getOrCreateFacebookPage(string $accessToken): ?FacebookPage
+    {
+        // First, check if we already have a page linked
+        $existingPage = $this->socialAccount->facebookPage;
+        if ($existingPage) {
+            return $existingPage;
+        }
+
+        // Get page ID from social account data
+        $pageId = $this->socialAccount->account_data['page_id'] 
+            ?? $this->socialAccount->platform_account_id;
+
+        if (!$pageId) {
+            // Try to get page info from the token
+            $response = Http::timeout(15)->get("https://graph.facebook.com/v18.0/me", [
+                'access_token' => $accessToken,
+                'fields' => 'id,name,category,fan_count,followers_count,about,picture',
+            ]);
+
+            if ($response->failed()) {
+                Log::error('Failed to get Facebook page info', [
+                    'error' => $response->json()['error'] ?? 'Unknown error'
+                ]);
+                return null;
+            }
+
+            $pageData = $response->json();
+            $pageId = $pageData['id'];
+
+            // Update social account with the discovered page ID
+            $this->socialAccount->update([
+                'platform_account_id' => $pageId,
+                'account_data' => array_merge($this->socialAccount->account_data ?? [], [
+                    'page_id' => $pageId,
+                    'page_name' => $pageData['name'] ?? null,
+                    'category' => $pageData['category'] ?? null,
+                ]),
+            ]);
+        } else {
+            // Fetch page data using the known page ID
+            $response = Http::timeout(15)->get("https://graph.facebook.com/v18.0/{$pageId}", [
+                'access_token' => $accessToken,
+                'fields' => 'id,name,category,fan_count,followers_count,about,picture',
+            ]);
+
+            $pageData = $response->successful() ? $response->json() : [
+                'id' => $pageId,
+                'name' => $this->socialAccount->account_name,
+            ];
+        }
+
+        // Create or update the Facebook Page record
+        $page = FacebookPage::updateOrCreate(
+            [
+                'social_account_id' => $this->socialAccount->id,
+                'page_id' => $pageId,
+            ],
+            [
+                'name' => $pageData['name'] ?? $this->socialAccount->account_name,
+                'category' => $pageData['category'] ?? null,
+                'likes_count' => $pageData['fan_count'] ?? 0,
+                'followers_count' => $pageData['followers_count'] ?? 0,
+                'about' => $pageData['about'] ?? null,
+                'profile_picture_url' => $pageData['picture']['data']['url'] ?? null,
+            ]
+        );
+
+        return $page;
     }
 }
 

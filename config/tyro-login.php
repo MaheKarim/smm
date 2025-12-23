@@ -136,8 +136,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'registration' => [
-        // Whether registration is enabled
-        'enabled' => env('TYRO_LOGIN_REGISTRATION_ENABLED', true),
+        // Whether registration is enabled (disabled for admin panel)
+        'enabled' => env('TYRO_LOGIN_REGISTRATION_ENABLED', false),
 
         // Whether to automatically log in the user after registration
         'auto_login' => env('TYRO_LOGIN_REGISTRATION_AUTO_LOGIN', false),

@@ -114,8 +114,8 @@
                 </button>
             </form>
 
-            <!-- Register Link -->
-            @if($registrationEnabled ?? true)
+            <!-- Register Link (hidden for admin panel) -->
+            @if(config('tyro-login.registration.enabled', false))
             <div class="form-footer">
                 <p>
                     Don't have an account?

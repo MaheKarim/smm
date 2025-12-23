@@ -1,309 +1,233 @@
 @extends('layouts.app')
 
 @section('title', 'Integrations')
-@section('breadcrumb-parent', 'Dashboard')
 @section('breadcrumb', 'Connected Accounts')
 
 @section('content')
-<div class="space-y-6">
-    <!-- Page Header -->
+<div class="space-y-6" x-data="integrations()">
+    <!-- Page Header with Instant Refresh -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-[var(--text-primary)]">Connected Accounts</h1>
-            <p class="text-[var(--text-secondary)] mt-1">Manage your social media platform connections</p>
+            <p class="text-[var(--text-secondary)] mt-1">Manage your social media platform connections and sync settings</p>
         </div>
-        <form action="{{ route('integrations.sync-all') }}" method="POST">
-            @csrf
-            <button type="submit" class="btn btn-primary">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center gap-3">
+            <!-- Instant Refresh Button -->
+            <button 
+                @click="instantRefresh()"
+                :disabled="refreshing"
+                class="btn btn-primary relative overflow-hidden"
+                :class="{ 'opacity-75 cursor-not-allowed': refreshing }"
+            >
+                <svg x-show="!refreshing" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
-                Sync All
+                <svg x-show="refreshing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span x-text="refreshing ? 'Syncing...' : 'Instant Refresh'"></span>
+                <div x-show="refreshProgress > 0 && refreshProgress < 100" 
+                     class="absolute bottom-0 left-0 h-1 bg-white/30 transition-all duration-300"
+                     :style="{ width: refreshProgress + '%' }"></div>
             </button>
-        </form>
-    </div>
-
-    <!-- Platform Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Facebook -->
-        <div class="card p-6">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="w-14 h-14 rounded-xl bg-[#1877f2] flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            
+            <form action="{{ route('integrations.sync-all') }}" method="POST" class="inline">
+                @csrf
+                <button type="submit" class="btn btn-secondary">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold text-[var(--text-primary)]">Facebook Pages</h3>
-                    <p class="text-sm text-[var(--text-secondary)]">
-                        {{ $accounts->get('facebook', collect())->count() }} page(s) connected
-                    </p>
-                </div>
-            </div>
-
-            @if($accounts->get('facebook', collect())->count() > 0)
-                <div class="space-y-3 mb-4">
-                    @foreach($accounts->get('facebook') as $account)
-                        <div class="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-hover)]">
-                            <div class="flex items-center gap-3">
-                                <img src="{{ $account->account_data['picture'] ?? 'https://via.placeholder.com/40' }}" alt="{{ $account->account_name }}" class="w-10 h-10 rounded-full">
-                                <div>
-                                    <p class="font-medium text-[var(--text-primary)]">{{ $account->account_name }}</p>
-                                    <p class="text-xs text-[var(--text-muted)]">
-                                        @if($account->isActive())
-                                            <span class="text-green-500">● Active</span>
-                                        @else
-                                            <span class="text-amber-500">● Needs reauthorization</span>
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <form action="{{ route('integrations.sync', $account) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--surface-alt)] rounded-lg transition-colors" title="Sync">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                                <form action="{{ route('integrations.disconnect', $account) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to disconnect this account?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <a href="{{ route('integrations.facebook.connect') }}" class="btn btn-secondary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Connect Facebook Page
-            </a>
-        </div>
-
-        <!-- YouTube -->
-        <div class="card p-6">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="w-14 h-14 rounded-xl bg-[#ff0000] flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold text-[var(--text-primary)]">YouTube Channels</h3>
-                    <p class="text-sm text-[var(--text-secondary)]">
-                        {{ $accounts->get('youtube', collect())->count() }} channel(s) connected
-                    </p>
-                </div>
-            </div>
-
-            @if($accounts->get('youtube', collect())->count() > 0)
-                <div class="space-y-3 mb-4">
-                    @foreach($accounts->get('youtube') as $account)
-                        <div class="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-hover)]">
-                            <div class="flex items-center gap-3">
-                                <img src="{{ $account->account_data['thumbnail'] ?? 'https://via.placeholder.com/40' }}" alt="{{ $account->account_name }}" class="w-10 h-10 rounded-full">
-                                <div>
-                                    <p class="font-medium text-[var(--text-primary)]">{{ $account->account_name }}</p>
-                                    <p class="text-xs text-[var(--text-muted)]">
-                                        @if($account->isActive())
-                                            <span class="text-green-500">● Active</span>
-                                        @else
-                                            <span class="text-amber-500">● Needs reauthorization</span>
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <form action="{{ route('integrations.sync', $account) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--surface-alt)] rounded-lg transition-colors" title="Sync">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                                <form action="{{ route('integrations.disconnect', $account) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to disconnect this account?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <a href="{{ route('integrations.youtube.connect') }}" class="btn btn-secondary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Connect YouTube Channel
-            </a>
-        </div>
-
-        <!-- Instagram -->
-        <div class="card p-6">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold text-[var(--text-primary)]">Instagram Business</h3>
-                    <p class="text-sm text-[var(--text-secondary)]">
-                        {{ $accounts->get('instagram', collect())->count() }} account(s) connected
-                    </p>
-                </div>
-            </div>
-
-            @if($accounts->get('instagram', collect())->count() > 0)
-                <div class="space-y-3 mb-4">
-                    @foreach($accounts->get('instagram') as $account)
-                        <div class="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-hover)]">
-                            <div class="flex items-center gap-3">
-                                <img src="{{ $account->account_data['profile_picture'] ?? 'https://via.placeholder.com/40' }}" alt="{{ $account->account_name }}" class="w-10 h-10 rounded-full">
-                                <div>
-                                    <p class="font-medium text-[var(--text-primary)]">@{{ $account->account_name }}</p>
-                                    <p class="text-xs text-[var(--text-muted)]">
-                                        @if($account->isActive())
-                                            <span class="text-green-500">● Active</span>
-                                        @else
-                                            <span class="text-amber-500">● Needs reauthorization</span>
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <form action="{{ route('integrations.sync', $account) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--surface-alt)] rounded-lg transition-colors" title="Sync">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                                <form action="{{ route('integrations.disconnect', $account) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to disconnect this account?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <a href="{{ route('integrations.instagram.connect') }}" class="btn btn-secondary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Connect Instagram Account
-            </a>
-        </div>
-
-        <!-- Google Analytics -->
-        <div class="card p-6">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="w-14 h-14 rounded-xl bg-[#f9ab00] flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M22.84 2.9977v17.004c0 1.6569-1.3431 3-3 3h-3.6211v-7.5028h2.5151l.3768-2.9211h-2.8918v-1.8611c0-.8461.2348-1.4228 1.4492-1.4228l1.5488-.0007V6.6901c-.2679-.0356-1.1875-.1152-2.2578-.1152-2.2339 0-3.7637 1.3636-3.7637 3.8686v2.1524H10.18v2.9211h2.5782V23h-9.758c-1.6569 0-3-1.3431-3-3V3c0-1.6569 1.3431-3 3-3h17.004c.7956 0 1.5587.3161 2.1213.8787.5626.5627.8787 1.3257.8787 2.1213z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold text-[var(--text-primary)]">Google Analytics</h3>
-                    <p class="text-sm text-[var(--text-secondary)]">
-                        {{ $accounts->get('google_analytics', collect())->count() }} property(s) connected
-                    </p>
-                </div>
-            </div>
-
-            @if($accounts->get('google_analytics', collect())->count() > 0)
-                <div class="space-y-3 mb-4">
-                    @foreach($accounts->get('google_analytics') as $account)
-                        <div class="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-hover)]">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-[#4285f4]/10 flex items-center justify-center">
-                                    <svg class="w-5 h-5 text-[#4285f4]" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-[var(--text-primary)]">{{ $account->account_name }}</p>
-                                    <p class="text-xs text-[var(--text-muted)]">
-                                        @if($account->isActive())
-                                            <span class="text-green-500">● Active</span>
-                                        @else
-                                            <span class="text-amber-500">● Needs reauthorization</span>
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <form action="{{ route('integrations.sync', $account) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--surface-alt)] rounded-lg transition-colors" title="Sync">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                                <form action="{{ route('integrations.disconnect', $account) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to disconnect this account?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <a href="{{ route('integrations.google-analytics.connect') }}" class="btn btn-secondary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Connect Google Analytics
-            </a>
+                    Sync All
+                </button>
+            </form>
         </div>
     </div>
 
-    <!-- Sync History -->
+    <!-- Platform Overview Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        @foreach($platforms as $key => $platform)
+        <div class="card p-6 group hover:shadow-lg transition-all duration-300 cursor-pointer"
+             @click="window.location='{{ route('integrations.show', $key) }}'">
+            <div class="flex items-start justify-between mb-4">
+                <div class="w-14 h-14 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                     style="background-color: {{ $platform['color'] }}20;">
+                    @include('integrations.partials.platform-icon', ['platform' => $key, 'class' => 'w-7 h-7', 'color' => $platform['color']])
+                </div>
+                <div class="flex items-center gap-1">
+                    @php
+                        $health = $platformHealth[$key] ?? ['status' => 'none', 'total' => 0];
+                    @endphp
+                    @if($health['status'] === 'healthy')
+                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    @elseif($health['status'] === 'warning')
+                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    @else
+                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                    @endif
+                </div>
+            </div>
+            
+            <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-1">{{ $platform['name'] }}</h3>
+            <p class="text-sm text-[var(--text-secondary)] mb-4">
+                {{ $accounts->get($key, collect())->count() }} {{ Str::plural('account', $accounts->get($key, collect())->count()) }} connected
+            </p>
+            
+            <div class="flex items-center justify-between">
+                <a href="{{ route('integrations.show', $key) }}" 
+                   class="text-sm font-medium hover:underline"
+                   style="color: {{ $platform['color'] }};"
+                   @click.stop>
+                    Manage →
+                </a>
+                @if(isset($lastSyncTimes[$key]))
+                    <span class="text-xs text-[var(--text-muted)]" title="Last synced">
+                        {{ \Carbon\Carbon::parse($lastSyncTimes[$key])->diffForHumans() }}
+                    </span>
+                @endif
+            </div>
+        </div>
+        @endforeach
+    </div>
+
+    <!-- Connection Status Overview -->
+    @if($accounts->flatten()->count() > 0)
     <div class="card p-6">
-        <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-6">Recent Sync History</h3>
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-[var(--text-primary)]">All Connected Accounts</h3>
+            <div class="flex items-center gap-4 text-sm">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                    Active
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    Needs Attention
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    Error
+                </span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            @foreach($accounts->flatten() as $account)
+                @php
+                    $platform = $platforms[$account->platform] ?? null;
+                    $isHealthy = $account->isActive();
+                    $isExpired = $account->isTokenExpired();
+                @endphp
+                <div class="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] hover:bg-[var(--surface-alt)] transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+                             style="background-color: {{ $platform['color'] ?? '#666' }}20;">
+                            @include('integrations.partials.platform-icon', ['platform' => $account->platform, 'class' => 'w-6 h-6', 'color' => $platform['color'] ?? '#666'])
+                        </div>
+                        <div>
+                            <p class="font-medium text-[var(--text-primary)]">{{ $account->account_name }}</p>
+                            <div class="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                                <span class="capitalize">{{ str_replace('_', ' ', $account->platform) }}</span>
+                                <span>•</span>
+                                @if($isHealthy)
+                                    <span class="text-green-500 flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                        Active
+                                    </span>
+                                @elseif($isExpired)
+                                    <span class="text-amber-500 flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        Token Expired
+                                    </span>
+                                @else
+                                    <span class="text-red-500 flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                        {{ ucfirst($account->status) }}
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        @if($isExpired || $account->status === 'expired')
+                            <a href="{{ route('integrations.reconnect', $account) }}" 
+                               class="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors">
+                                Reconnect
+                            </a>
+                        @else
+                            <form action="{{ route('integrations.sync', $account) }}" method="POST" class="inline">
+                                @csrf
+                                <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg transition-colors" title="Sync">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </button>
+                            </form>
+                        @endif
+                        
+                        <a href="{{ route('analytics.' . ($account->platform === 'google_analytics' ? 'google' : $account->platform)) }}" 
+                           class="p-2 text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg transition-colors" title="View Analytics">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </a>
+                        
+                        <form action="{{ route('integrations.disconnect', $account) }}" method="POST" class="inline" 
+                              onsubmit="return confirm('Are you sure you want to disconnect {{ $account->account_name }}?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="p-2 text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Disconnect">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @else
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <div class="w-20 h-20 rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center mx-auto mb-6">
+            <svg class="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+            </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-[var(--text-primary)] mb-2">No accounts connected yet</h3>
+        <p class="text-[var(--text-secondary)] mb-6 max-w-md mx-auto">
+            Connect your social media accounts to start tracking analytics and performance across all platforms.
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+            @foreach(['facebook', 'youtube', 'instagram', 'google_analytics'] as $platform)
+                <a href="{{ route('integrations.show', $platform) }}" 
+                   class="btn btn-secondary text-sm">
+                    Connect {{ ucfirst(str_replace('_', ' ', $platform)) }}
+                </a>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
+    <!-- Recent Sync Activity -->
+    <div class="card p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-[var(--text-primary)]">Recent Sync Activity</h3>
+            <span class="text-sm text-[var(--text-muted)]">Last 10 syncs</span>
+        </div>
         
         @if($syncLogs->isEmpty())
             <div class="text-center py-8 text-[var(--text-muted)]">
-                No sync history available yet.
+                <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <p>No sync activity yet. Connect an account to get started.</p>
             </div>
         @else
-            <div class="table-container">
-                <table class="table">
+            <div class="overflow-x-auto">
+                <table class="table w-full">
                     <thead>
                         <tr>
                             <th>Platform</th>
@@ -312,30 +236,43 @@
                             <th>Records</th>
                             <th>Status</th>
                             <th>Duration</th>
-                            <th>Date</th>
+                            <th>Time</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($syncLogs as $log)
-                            <tr>
+                            <tr class="hover:bg-[var(--surface-hover)]">
                                 <td>
-                                    <span class="capitalize">{{ str_replace('_', ' ', $log->platform) }}</span>
+                                    <div class="flex items-center gap-2">
+                                        @php $platform = $platforms[$log->platform] ?? null; @endphp
+                                        <div class="w-6 h-6 rounded flex items-center justify-center"
+                                             style="background-color: {{ $platform['color'] ?? '#666' }}20;">
+                                            @include('integrations.partials.platform-icon', ['platform' => $log->platform, 'class' => 'w-3.5 h-3.5', 'color' => $platform['color'] ?? '#666'])
+                                        </div>
+                                        <span class="capitalize">{{ str_replace('_', ' ', $log->platform) }}</span>
+                                    </div>
                                 </td>
                                 <td>{{ $log->socialAccount->account_name ?? 'N/A' }}</td>
-                                <td><span class="badge badge-info">{{ ucfirst($log->sync_type) }}</span></td>
-                                <td>{{ number_format($log->records_synced) }}</td>
+                                <td>
+                                    <span class="badge badge-info text-xs">{{ ucfirst($log->sync_type) }}</span>
+                                </td>
+                                <td class="font-mono text-sm">{{ number_format($log->records_synced) }}</td>
                                 <td>
                                     <span class="badge 
                                         @if($log->status === 'completed') badge-success
                                         @elseif($log->status === 'failed') badge-danger
                                         @elseif($log->status === 'running') badge-info
                                         @else badge-warning
-                                        @endif">
+                                        @endif text-xs">
                                         {{ ucfirst($log->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $log->duration_seconds ? $log->duration_seconds . 's' : '-' }}</td>
-                                <td>{{ $log->created_at->diffForHumans() }}</td>
+                                <td class="text-sm text-[var(--text-muted)]">
+                                    {{ $log->duration_seconds ? $log->duration_seconds . 's' : '-' }}
+                                </td>
+                                <td class="text-sm text-[var(--text-muted)]">
+                                    {{ $log->created_at->diffForHumans() }}
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -344,5 +281,80 @@
         @endif
     </div>
 </div>
-@endsection
 
+@push('scripts')
+<script>
+function integrations() {
+    return {
+        refreshing: false,
+        refreshProgress: 0,
+        jobId: null,
+        
+        async instantRefresh() {
+            if (this.refreshing) return;
+            
+            this.refreshing = true;
+            this.refreshProgress = 0;
+            
+            try {
+                const response = await fetch('{{ route('integrations.instant-refresh') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                    },
+                });
+                
+                if (response.status === 429) {
+                    const data = await response.json();
+                    alert(`Please wait ${data.retry_after} seconds before refreshing again.`);
+                    this.refreshing = false;
+                    return;
+                }
+                
+                const data = await response.json();
+                this.jobId = data.job_id;
+                
+                // Poll for status
+                await this.pollSyncStatus();
+                
+            } catch (error) {
+                console.error('Refresh failed:', error);
+                this.refreshing = false;
+            }
+        },
+        
+        async pollSyncStatus() {
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/integrations/sync-status/${this.jobId}`);
+                    const data = await response.json();
+                    
+                    this.refreshProgress = data.progress || 0;
+                    
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        this.refreshing = false;
+                        this.refreshProgress = 100;
+                        
+                        // Reload to show updated data
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        // Continue polling
+                        setTimeout(poll, 1000);
+                    }
+                } catch (error) {
+                    console.error('Status poll failed:', error);
+                    this.refreshing = false;
+                }
+            };
+            
+            await poll();
+        }
+    };
+}
+</script>
+@endpush
+@endsection

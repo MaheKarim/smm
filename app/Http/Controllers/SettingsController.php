@@ -73,5 +73,35 @@ class SettingsController extends Controller
         return redirect()->route('settings.index')
             ->with('success', 'Password updated successfully.');
     }
+
+    /**
+     * Delete the user's account
+     */
+    public function deleteAccount(Request $request)
+    {
+        $request->validate([
+            'password' => ['required', 'current_password'],
+            'confirmation' => ['required', 'in:DELETE'],
+        ], [
+            'confirmation.in' => 'Please type DELETE to confirm account deletion.',
+        ]);
+
+        $user = Auth::user();
+        
+        // Log out first
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        
+        // Delete all related data (cascades should handle most, but be explicit)
+        $user->socialAccounts()->delete();
+        $user->syncLogs()->delete();
+        $user->settings()->delete();
+        
+        // Delete the user
+        $user->delete();
+        
+        return redirect('/login')->with('success', 'Your account has been permanently deleted.');
+    }
 }
 
